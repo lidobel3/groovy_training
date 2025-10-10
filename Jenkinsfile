@@ -4,7 +4,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'mkdir ./TOTO' //Jenkins va créer le repertoire dans /var/jenkins_home/workspace/apprentissage/TOTO 
+                sh '[ ! -d ./TOTO ] && mkdir ./TOTO' //Jenkins va créer le repertoire dans /var/jenkins_home/workspace/apprentissage/TOTO 
             }
         }
         stage('Test') {
