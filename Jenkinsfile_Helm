@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    environment {
+        KUBECONFIG = credentials('kubeconfig-credentials-id')
+        HELM_RELEASE = "mon-release"
+        HELM_CHART = "./charts/mon-chart"
+        NAMESPACE = "mon-namespace"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Check Helm') {
+            steps {
+                script {
+                    def isHelmInstalled = sh (
+                        script: 'helm version --short',
+                        returnStatus: true
+                    ) == 0
+                    if (!isHelmInstalled) {
+                        echo "Helm non trouvé, installation en cours..."
+                        sh '''
+                            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                        '''
+                    } else {
+                        echo "Helm est déjà installé."
+                    }
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("monrepo/monimage:${env.BUILD_NUMBER}")
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://myregistry.example.com', 'docker-credentials-id') {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+        stage('Helm Upgrade / Install') {
+            steps {
+                script {
+                    sh """
+                    helm upgrade --install ${HELM_RELEASE} ${HELM_CHART} \
+                      --namespace ${NAMESPACE} \
+                      --set image.repository=monrepo/monimage \
+                      --set image.tag=${env.BUILD_NUMBER} \
+                      --kubeconfig ${KUBECONFIG}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Déploiement réussi avec Helm sur Kubernetes"
+        }
+        failure {
+            echo "Le déploiement a échoué"
+        }
+    }
+}
